@@ -25,8 +25,8 @@ The system implements a classic RAG pipeline:
 
 ## Prerequisites
 
-- Python 3.8+
-- NVIDIA API Key (get it from [NVIDIA AI Playground](https://build.nvidia.com))
+- Python 3.10 or newer
+- An API key for any OpenAI-compatible chat provider, such as a free [Groq](https://console.groq.com/keys) key
 
 ## Installation
 
@@ -36,8 +36,11 @@ git clone https://github.com/Vanshff007/RAG_Application
 cd RAG_Application
 ```
 
-2. Install dependencies:
+2. Create a virtual environment and install dependencies:
 ```bash
+python -m venv .venv
+.venv\Scriptsctivate        # Windows
+# source .venv/bin/activate   # macOS/Linux
 pip install -r requirements.txt
 ```
 
@@ -120,6 +123,7 @@ To process a different document with the CLI:
 ├── rag_ans.py            # Command-line interface
 ├── embed_chunks.py       # Embedding generation script
 ├── load_chunk.py         # Document loading and chunking utilities
+├── local_embed.py        # Local embeddings with fastembed (EMBED_PROVIDER=local)
 ├── data.txt              # Default knowledge base
 ├── requirements.txt      # Python dependencies
 ├── .env                  # Environment variables (create this)
@@ -139,9 +143,11 @@ index.search(query_emb, k=2)  # Change k to retrieve more/fewer chunks
 
 Change models in your `.env` file:
 ```env
-EMBED_MODEL=nvidia/llama-3.2-nv-embedqa-1b-v2
-LLM_MODEL=meta/llama-3.3-70b-instruct
+EMBED_MODEL=BAAI/bge-small-en-v1.5
+LLM_MODEL=openai/gpt-oss-120b
 ```
+
+The models available to a key depend on the provider and plan. For Groq, list them at https://api.groq.com/openai/v1/models.
 
 ## How It Works
 
@@ -152,15 +158,17 @@ The system uses an LLM to generate 3-5 related questions for each user query, im
 
 ### Fallback Mechanism
 When the document doesn't contain relevant information:
-- **Default mode**: Falls back to general LLM knowledge
-- **Document-only mode**: Informs user that the answer isn't in the document
+- **"Use only the document" on** (default in the web app): says the answer isn't in the document
+- **"Use only the document" off**: falls back to general LLM knowledge
+
+Tasks such as "summarize" or "explain" send the whole document to the LLM instead of searching it. Documents longer than `MAX_TASK_CHARS` (default 20000 characters) are cut to that length for tasks, and the app shows a warning.
 
 ### Refusal Detection
 The system detects when the LLM indicates it cannot answer from context and automatically triggers fallback behavior.
 
 ## API Rate Limits
 
-Be aware of NVIDIA API rate limits. The system includes:
+Free API tiers have rate limits (requests and tokens per minute). The system includes:
 - Timeout configurations (20-60 seconds)
 - Error handling with detailed messages
 - Sequential processing to avoid overwhelming the API
@@ -168,7 +176,7 @@ Be aware of NVIDIA API rate limits. The system includes:
 ## Troubleshooting
 
 ### "Embedding API error"
-- Check your NVIDIA API key is valid
+- Check that `LLM_API_KEY` in `.env` is valid
 - Ensure you have API credits remaining
 - Verify your internet connection
 
@@ -181,10 +189,12 @@ Be aware of NVIDIA API rate limits. The system includes:
 - Increase the number of retrieved chunks (k parameter)
 - Use query expansion (enabled by default)
 - Upload a more comprehensive document
-- 
+
 ## Acknowledgments
 
+- Based on [DK2325/RAG_Application](https://github.com/DK2325/RAG_Application), used with the author's permission
 - Built with [LangChain](https://www.langchain.com/)
 - Vector search powered by [FAISS](https://github.com/facebookresearch/faiss)
-- Embeddings and LLM inference via [NVIDIA AI Endpoints](https://build.nvidia.com)
+- Local embeddings via [FastEmbed](https://github.com/qdrant/fastembed)
+- LLM inference via any OpenAI-compatible API ([Groq](https://groq.com), [Gemini](https://ai.google.dev), [NVIDIA](https://build.nvidia.com))
 - UI built with [Streamlit](https://streamlit.io/)

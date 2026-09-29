@@ -1,10 +1,10 @@
-from langchain_community.document_loaders.text import TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 def load_chunk(file_path: str):
     """Loads a text file and splits it into chunks."""
-    loader = TextLoader(file_path)
-    raw_docs = loader.load()
+    with open(file_path, encoding="utf-8") as f:
+        raw_docs = [Document(page_content=f.read(), metadata={"source": file_path})]
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=500,
