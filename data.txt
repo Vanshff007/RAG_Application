@@ -1,0 +1,7 @@
+RAG stands for Retrieval-Augmented Generation.
+It is a technique used in modern question answering systems where documents are first split into chunks.
+Each chunk is converted inext into a large language model (LLM) to generate a response.
+This architecture allows LLMs to answer questions using private, domain-specific, or updated information.to a numerical vector using an embedding model.
+These vectors are stored in a vector database such as FAISS or Chroma.
+When a user asks a question, the system retrieves the most relevant chunks from the database.
+These chunks are passed as cont

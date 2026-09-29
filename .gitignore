@@ -1,0 +1,10 @@
+# Compiled files
+__pycache__/
+*.pyc
+
+# RAG Index Files (Large/Intermediate)
+faiss_index.bin
+text_chunks.pkl
+
+# Environment variable file (Always ignore this for security)
+.env
