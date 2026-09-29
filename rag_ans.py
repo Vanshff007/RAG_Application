@@ -4,13 +4,26 @@ import numpy as np
 import requests
 import os
 import re
+from local_embed import local_embed
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except Exception:
     pass
-EMBED_MODEL = os.getenv("EMBED_MODEL", "nvidia/llama-3.2-nv-embedqa-1b-v2")
-LLM_MODEL = os.getenv("LLM_MODEL", "meta/llama-3.3-70b-instruct")
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai").rstrip("/")
+LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("NVIDIA_API_KEY")
+EMBED_MODEL = os.getenv("EMBED_MODEL", "gemini-embedding-001")
+# "local" embeds on this machine (see local_embed.py); anything else calls LLM_BASE_URL
+EMBED_PROVIDER = os.getenv("EMBED_PROVIDER", "api")
+LLM_MODEL = os.getenv("LLM_MODEL", "gemini-3.8-flash")
+
+
+def embed_payload(texts, input_type):
+    payload = {"input": texts, "model": EMBED_MODEL}
+    # input_type is an NVIDIA-only field; other providers reject it
+    if "nvidia.com" in LLM_BASE_URL:
+        payload["input_type"] = input_type
+    return payload
 
 try:
     index = faiss.read_index("faiss_index.bin")
@@ -23,12 +36,14 @@ except FileNotFoundError:
     exit()
     
 def get_query_embedding(question):
-    url = "https://integrate.api.nvidia.com/v1/embeddings"
+    if EMBED_PROVIDER == "local":
+        return local_embed([question], "query")[0]
+    url = f"{LLM_BASE_URL}/embeddings"
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.getenv('NVIDIA_API_KEY')}"
+        "Authorization": f"Bearer {LLM_API_KEY}"
     }
-    payload = {"input": [question], "model": EMBED_MODEL, "input_type": "query"}
+    payload = embed_payload([question], "query")
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=20)
         response.raise_for_status()
@@ -38,11 +53,11 @@ def get_query_embedding(question):
         return None
 
 def expand_query_with_llm(question):
-    url = "https://integrate.api.nvidia.com/v1/chat/completions"
+    url = f"{LLM_BASE_URL}/chat/completions"
     headers = {
         "accept": "application/json", 
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.getenv('NVIDIA_API_KEY')}"
+        "Authorization": f"Bearer {LLM_API_KEY}"
     }
     
     expansion_prompt = f"""You are an expert at converting a user's question into effective search queries for a vector database.
@@ -55,7 +70,7 @@ User Question: "{question}"
     payload = {
         "model": LLM_MODEL,
         "messages": [{"role": "user", "content": expansion_prompt}],
-        "max_tokens": 200, "temperature": 0.2
+        "max_tokens": 1024, "temperature": 0.2
     }
     
     try:
@@ -72,11 +87,11 @@ User Question: "{question}"
         return [question]
 
 def ask_llm(context, question):
-    url = "https://integrate.api.nvidia.com/v1/chat/completions"
+    url = f"{LLM_BASE_URL}/chat/completions"
     headers = {
         "accept": "application/json", 
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.getenv('NVIDIA_API_KEY')}"
+        "Authorization": f"Bearer {LLM_API_KEY}"
     }
     
     synthesis_prompt = f"""You are a helpful AI assistant. Answer the user's question based *only* on the following context.
@@ -106,11 +121,11 @@ Question: {question}
 
 def ask_llm_open(question):
     """Ask the LLM without context (general fallback)."""
-    url = "https://integrate.api.nvidia.com/v1/chat/completions"
+    url = f"{LLM_BASE_URL}/chat/completions"
     headers = {
         "accept": "application/json",
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.getenv('NVIDIA_API_KEY')}"
+        "Authorization": f"Bearer {LLM_API_KEY}"
     }
     payload = {
         "model": LLM_MODEL,

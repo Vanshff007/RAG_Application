@@ -9,6 +9,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document as LCDocument
 import os
 import re
+from local_embed import local_embed
 
 try:
     from dotenv import load_dotenv
@@ -16,8 +17,21 @@ try:
 except Exception:
     pass
 
-EMBED_MODEL = os.getenv("EMBED_MODEL", "nvidia/llama-3.2-nv-embedqa-1b-v2")
-LLM_MODEL = os.getenv("LLM_MODEL", "meta/llama-3.3-70b-instruct")
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai").rstrip("/")
+LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("NVIDIA_API_KEY")
+EMBED_MODEL = os.getenv("EMBED_MODEL", "gemini-embedding-001")
+# "local" embeds on this machine (see local_embed.py); anything else calls LLM_BASE_URL
+EMBED_PROVIDER = os.getenv("EMBED_PROVIDER", "api")
+LLM_MODEL = os.getenv("LLM_MODEL", "gemini-3.8-flash")
+EMBED_BATCH_SIZE = 100
+
+
+def embed_payload(texts, input_type):
+    payload = {"input": texts, "model": EMBED_MODEL}
+    # input_type is an NVIDIA-only field; other providers reject it
+    if "nvidia.com" in LLM_BASE_URL:
+        payload["input_type"] = input_type
+    return payload
 
 
 def read_pdf(file):
@@ -47,33 +61,40 @@ def is_task_question(question: str) -> bool:
 
 
 def embed_chunks(chunks):
-    url = "https://integrate.api.nvidia.com/v1/embeddings"
+    if EMBED_PROVIDER == "local":
+        return local_embed(chunks, "passage")
+    url = f"{LLM_BASE_URL}/embeddings"
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.getenv('NVIDIA_API_KEY')}"
+        "Authorization": f"Bearer {LLM_API_KEY}"
     }
-    payload = {"input": chunks, "model": EMBED_MODEL, "input_type": "passage"}
-    response = requests.post(url, json=payload, headers=headers, timeout=30)
-    response.raise_for_status()
-    return [item["embedding"] for item in response.json()["data"]]
+    embeddings = []
+    for start in range(0, len(chunks), EMBED_BATCH_SIZE):
+        payload = embed_payload(chunks[start:start + EMBED_BATCH_SIZE], "passage")
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        response.raise_for_status()
+        embeddings.extend(item["embedding"] for item in response.json()["data"])
+    return embeddings
 
 def get_query_embedding(question):
-    url = "https://integrate.api.nvidia.com/v1/embeddings"
+    if EMBED_PROVIDER == "local":
+        return local_embed([question], "query")[0]
+    url = f"{LLM_BASE_URL}/embeddings"
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.getenv('NVIDIA_API_KEY')}"
+        "Authorization": f"Bearer {LLM_API_KEY}"
     }
-    payload = {"input": [question], "model": EMBED_MODEL, "input_type": "query"}
+    payload = embed_payload([question], "query")
     response = requests.post(url, json=payload, headers=headers, timeout=20)
     response.raise_for_status()
     return response.json()["data"][0]["embedding"]
 
 
 def run_task_on_document(document_text, task):
-    url = "https://integrate.api.nvidia.com/v1/chat/completions"
+    url = f"{LLM_BASE_URL}/chat/completions"
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.getenv('NVIDIA_API_KEY')}"
+        "Authorization": f"Bearer {LLM_API_KEY}"
     }
 
     prompt = f"""
@@ -103,10 +124,10 @@ Task:
     return response.json()["choices"][0]["message"]["content"]
 
 def ask_llm_fact(context, question):
-    url = "https://integrate.api.nvidia.com/v1/chat/completions"
+    url = f"{LLM_BASE_URL}/chat/completions"
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.getenv('NVIDIA_API_KEY')}"
+        "Authorization": f"Bearer {LLM_API_KEY}"
     }
 
     prompt = f"""

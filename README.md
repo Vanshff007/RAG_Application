@@ -32,7 +32,7 @@ The system implements a classic RAG pipeline:
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/DK2325/RAG_Application
+git clone https://github.com/Vanshff007/RAG_Application
 cd RAG_Application
 ```
 
@@ -42,12 +42,33 @@ pip install -r requirements.txt
 ```
 
 3. Set up environment variables:
-Create a `.env` file in the project root:
+Create a `.env` file in the project root. The app works with any OpenAI-compatible API. The default is Google Gemini, which has a free key at https://aistudio.google.com/apikey:
 ```env
-NVIDIA_API_KEY=your_api_key_here
+LLM_API_KEY=your_api_key_here
+LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+EMBED_MODEL=gemini-embedding-001
+LLM_MODEL=gemini-3.8-flash
+```
+
+To use Groq for chat and free local embeddings instead (no Google account needed, free Groq key at https://console.groq.com/keys):
+```env
+LLM_API_KEY=your_groq_api_key
+LLM_BASE_URL=https://api.groq.com/openai/v1
+LLM_MODEL=openai/gpt-oss-120b
+EMBED_PROVIDER=local
+EMBED_MODEL=BAAI/bge-small-en-v1.5
+```
+With `EMBED_PROVIDER=local`, embeddings run on your machine through `fastembed`. The model (about 130 MB) downloads on first use. Set `EMBED_CACHE_DIR` to choose where it is stored.
+
+To use NVIDIA instead:
+```env
+LLM_API_KEY=your_nvidia_api_key
+LLM_BASE_URL=https://integrate.api.nvidia.com/v1
 EMBED_MODEL=nvidia/llama-3.2-nv-embedqa-1b-v2
 LLM_MODEL=meta/llama-3.3-70b-instruct
 ```
+
+After changing `EMBED_MODEL`, run `python embed_chunks.py` again to rebuild the index.
 
 ## Usage
 
